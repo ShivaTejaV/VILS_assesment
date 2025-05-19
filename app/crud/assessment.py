@@ -76,3 +76,5 @@ def get_active_assessment_by_type(db: Session, type_id: int):
         .filter(Assessment.type_id == type_id, Assessment.is_active == True)
         .first()
     )
+
+

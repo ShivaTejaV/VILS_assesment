@@ -1,39 +1,80 @@
-from typing import List, Optional
 from sqlalchemy.orm import Session
-from app import models, schemas
+from models import QuestionSet, Question
+from schemas import QuestionSetCreate
+from typing import List, Optional
 
-def get_question_set(db: Session, id: int) -> Optional[models.QuestionSet]:
-    return db.query(models.QuestionSet).filter(models.QuestionSet.id == id).first()
+# ─── Create QuestionSet with auto versioning ─────────────────
 
-def get_question_sets(db: Session, skip: int = 0, limit: int = 100) -> List[models.QuestionSet]:
-    return db.query(models.QuestionSet).offset(skip).limit(limit).all()
-
-def create_question_set(db: Session, obj_in: schemas.QuestionSetCreate) -> models.QuestionSet:
-    qs = models.QuestionSet(
-        assessment_id=obj_in.assessment_id,
-        parent_id=obj_in.parent_id,
-        version=obj_in.version,
-        is_active=obj_in.is_active
+def create_question_set(db: Session, data: QuestionSetCreate) -> QuestionSet:
+    # Get latest version for the given assessment
+    last_qs = (
+        db.query(QuestionSet)
+        .filter(QuestionSet.assessment_id == data.assessment_id)
+        .order_by(QuestionSet.version.desc())
+        .first()
     )
-    db.add(qs)
+    new_version = (last_qs.version + 1) if last_qs else 1
+
+    db_qs = QuestionSet(
+        assessment_id=data.assessment_id,
+        version=new_version,
+        is_active=False  # Always false on creation
+    )
+
+    db.add(db_qs)
     db.commit()
-    questions = db.query(models.Question).filter(models.Question.id.in_(obj_in.question_ids)).all()
-    qs.questions = questions
+    db.refresh(db_qs)
+
+    # Link questions
+    questions = db.query(Question).filter(Question.id.in_(data.question_ids)).all()
+    db_qs.questions.extend(questions)
+
+    db.commit()
+    db.refresh(db_qs)
+    return db_qs
+
+# ─── Get QuestionSet by ID ───────────────────────────────────
+
+def get_question_set(db: Session, question_set_id: int) -> Optional[QuestionSet]:
+    return db.query(QuestionSet).filter(QuestionSet.id == question_set_id).first()
+
+# ─── Get all QuestionSets by assessment ID ───────────────────
+
+def get_question_sets_by_assessment(db: Session, assessment_id: int) -> List[QuestionSet]:
+    return (
+        db.query(QuestionSet)
+        .filter(QuestionSet.assessment_id == assessment_id)
+        .order_by(QuestionSet.version.desc())
+        .all()
+    )
+
+# ─── Get active QuestionSet by assessment ID ─────────────────
+
+def get_active_question_set_by_assessment(db: Session, assessment_id: int) -> Optional[QuestionSet]:
+    return (
+        db.query(QuestionSet)
+        .filter(
+            QuestionSet.assessment_id == assessment_id,
+            QuestionSet.is_active == True
+        )
+        .first()
+    )
+
+# ─── Activate a specific QuestionSet ─────────────────────────
+
+def activate_question_set(db: Session, question_set_id: int) -> Optional[QuestionSet]:
+    qs = get_question_set(db, question_set_id)
+    if not qs:
+        return None
+
+    # Deactivate all other active sets for same assessment
+    db.query(QuestionSet).filter(
+        QuestionSet.assessment_id == qs.assessment_id,
+        QuestionSet.is_active == True,
+        QuestionSet.id != qs.id
+    ).update({QuestionSet.is_active: False})  # type: ignore
+
+    qs.is_active = True  # type: ignore
     db.commit()
     db.refresh(qs)
     return qs
-
-def update_question_set(db: Session, db_obj: models.QuestionSet, obj_in: schemas.QuestionSetCreate) -> models.QuestionSet:
-    setattr(db_obj, "parent_id", obj_in.parent_id)
-    setattr(db_obj, "version", obj_in.version)
-    setattr(db_obj, "is_active", obj_in.is_active)
-    if obj_in.question_ids:
-        questions = db.query(models.Question).filter(models.Question.id.in_(obj_in.question_ids)).all()
-        db_obj.questions = questions
-    db.commit()
-    db.refresh(db_obj)
-    return db_obj
-
-def delete_question_set(db: Session, db_obj: models.QuestionSet) -> None:
-    db.delete(db_obj)
-    db.commit()

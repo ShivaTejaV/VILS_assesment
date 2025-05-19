@@ -76,3 +76,46 @@ class AssessmentRead(AssessmentBase):
     class Config:
         orm_mode = True
 
+
+
+# ─── Question set Schemas ─────────────────────────────────────────────────────────────────
+
+from pydantic import BaseModel
+from typing import List, Optional
+from .schemas import QuestionRead  # Ensure QuestionRead is already defined
+
+class QuestionSetBase(BaseModel):
+    assessment_id: int
+    version: int
+    is_active: Optional[bool] = False
+
+class QuestionSetCreate(BaseModel):
+    assessment_id: int
+    question_ids: List[int]
+
+class QuestionSetRead(QuestionSetBase):
+    id: int
+    questions: List[QuestionRead]
+
+    class Config:
+        orm_mode = True
+
+# ─── Question Schemas ─────────────────────────────────────────────────────────────────
+
+from pydantic import BaseModel
+from typing import List, Any  # Temporarily using Any for option_sets
+
+class QuestionBase(BaseModel):
+    text: str
+    max_score: int
+
+class QuestionCreate(QuestionBase):
+    pass
+
+class QuestionRead(QuestionBase):
+    id: int
+    option_sets: List[Any]  # Replace Any with OptionSetRead once it's defined
+
+    class Config:
+        orm_mode = True
+

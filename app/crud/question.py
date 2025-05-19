@@ -1,30 +1,31 @@
-from typing import List, Optional
 from sqlalchemy.orm import Session
-from app import models, schemas
+from models import Question,QuestionSet
+from schemas import QuestionCreate
+from typing import List, Optional
 
-def get_question(db: Session, id: int) -> Optional[models.Question]:
-    return db.query(models.Question).filter(models.Question.id == id).first()
-
-def get_questions(db: Session, skip: int = 0, limit: int = 100) -> List[models.Question]:
-    return db.query(models.Question).offset(skip).limit(limit).all()
-
-def create_question(db: Session, obj_in: schemas.QuestionCreate) -> models.Question:
-    db_obj = models.Question(
-        text=obj_in.text,
-        max_score=obj_in.max_score
+def create_question(db: Session, question: QuestionCreate) -> Question:
+    db_question = Question(
+        text=question.text,
+        max_score=question.max_score
     )
-    db.add(db_obj)
+    db.add(db_question)
     db.commit()
-    db.refresh(db_obj)
-    return db_obj
+    db.refresh(db_question)
+    return db_question
 
-def update_question(db: Session, db_obj: models.Question, obj_in: schemas.QuestionCreate) -> models.Question:
-    setattr(db_obj, "text", obj_in.text)
-    setattr(db_obj, "max_score", obj_in.max_score)
-    db.commit()
-    db.refresh(db_obj)
-    return db_obj
+def get_question(db: Session, question_id: int) -> Optional[Question]:
+    return db.query(Question).filter(Question.id == question_id).first()
 
-def delete_question(db: Session, db_obj: models.Question) -> None:
-    db.delete(db_obj)
-    db.commit()
+def get_questions(db: Session, skip: int = 0, limit: int = 100) -> List[Question]:
+    return db.query(Question).offset(skip).limit(limit).all()
+
+def get_questions_by_question_set(db: Session, question_set_id: int) -> List[Question]:
+    return (
+        db.query(Question)
+        .join(Question.question_sets)  # join through the secondary table
+        .filter(
+            QuestionSet.id == question_set_id,
+            Question.option_sets.any()  # ensure it has at least one option set
+        )
+        .all()
+    )

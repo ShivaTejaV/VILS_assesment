@@ -103,7 +103,6 @@ class QuestionSet(Base):
     __tablename__ = "question_sets"
 
     id = Column(Integer, primary_key=True, index=True)
-    parent_id = Column(Integer, nullable=True, index=True)
     version = Column(Integer, nullable=False, index=True)
     is_active = Column(Boolean, default=False, nullable=False)
 
